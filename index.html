@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Libro de Comprobantes</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --paper:#F3F5EF;
+    --paper-raised:#FBFCF9;
+    --ink:#16241C;
+    --ink-soft:#4B584F;
+    --line:#D6D8C9;
+    --line-soft:#E5E6DB;
+    --green:#2F6B4F;
+    --green-soft:#E1EBE2;
+    --brick:#A24A34;
+    --brick-soft:#F3E3DC;
+    --amber:#B8843A;
+    --shadow:0 1px 3px rgba(22,36,28,0.06);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  ::selection{background:var(--green-soft);}
+  .app{max-width:1180px;margin:0 auto;padding:28px 20px 80px;}
+
+  /* Header */
+  .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:0.7rem;letter-spacing:.09em;text-transform:uppercase;color:var(--green);margin-bottom:7px;font-weight:500;}
+  header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;border-bottom:2px solid var(--ink);padding-bottom:18px;margin-bottom:6px;flex-wrap:wrap;}
+  header h1{font-family:'Source Serif 4',serif;font-weight:700;font-size:2rem;margin:0 0 4px;letter-spacing:-0.01em;}
+  header p{margin:0;color:var(--ink-soft);font-size:0.92rem;max-width:46ch;line-height:1.45;}
+  .count-badge{font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:var(--ink-soft);border:1px solid var(--line);border-radius:20px;padding:6px 14px;white-space:nowrap;background:var(--paper-raised);box-shadow:var(--shadow);}
+  .device-note{font-size:0.76rem;color:var(--amber);margin:8px 0 18px;line-height:1.5;background:#FBF3E6;border:1px solid #E9D6AE;padding:9px 12px;border-radius:7px;}
+  .device-note b{color:var(--ink);}
+
+  /* Stats */
+  .stats-bar{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;}
+  .stat{background:var(--paper-raised);border:1px solid var(--line-soft);border-radius:9px;padding:11px 16px;flex:1;min-width:150px;box-shadow:var(--shadow);}
+  .stat .stat-label{font-size:0.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:4px;}
+  .stat .stat-value{font-family:'IBM Plex Mono',monospace;font-size:1.08rem;font-weight:600;color:var(--ink);}
+
+  /* Upload */
+  .dropzone{border:1.5px dashed var(--line);border-radius:10px;background:var(--paper-raised);padding:22px 20px;display:flex;align-items:center;gap:16px;cursor:pointer;transition:border-color .15s, background .15s;margin-bottom:18px;box-shadow:var(--shadow);}
+  .dropzone:hover, .dropzone.drag{border-color:var(--green);background:var(--green-soft);}
+  .dropzone .icon{font-size:1.6rem;flex-shrink:0;}
+  .dropzone .txt strong{display:block;font-size:0.95rem;margin-bottom:2px;}
+  .dropzone .txt span{font-size:0.82rem;color:var(--ink-soft);}
+  input[type=file]{display:none;}
+
+  .queue{margin-bottom:18px;display:flex;flex-direction:column;gap:8px;}
+  .queue-item{background:var(--paper-raised);border:1px solid var(--line-soft);border-radius:8px;padding:10px 14px;font-size:0.82rem;display:flex;align-items:center;gap:10px;}
+  .queue-item .qname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-soft);}
+  .queue-item .bar{width:120px;height:6px;background:var(--line-soft);border-radius:4px;overflow:hidden;flex-shrink:0;}
+  .queue-item .bar-fill{height:100%;background:var(--green);width:0%;transition:width .2s;}
+  .queue-item .qstatus{font-family:'IBM Plex Mono',monospace;font-size:0.72rem;color:var(--green);width:80px;text-align:right;flex-shrink:0;}
+
+  /* Layout */
+  .layout{display:grid;grid-template-columns:260px 1fr;gap:24px;align-items:start;}
+  @media (max-width: 780px){ .layout{grid-template-columns:1fr;} }
+
+  /* Filters */
+  .filters{background:var(--paper-raised);border:1px solid var(--line-soft);border-radius:10px;padding:18px;position:sticky;top:16px;box-shadow:var(--shadow);}
+  .filters h2{font-family:'Source Serif 4',serif;font-size:1rem;margin:0 0 14px;font-weight:600;}
+  .field{margin-bottom:14px;}
+  .field label{display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--ink-soft);margin-bottom:5px;}
+  .field input, .field select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:0.86rem;font-family:'Inter',sans-serif;background:#fff;color:var(--ink);}
+  .field input:focus, .field select:focus{outline:none;border-color:var(--green);}
+  .range-row{display:flex;gap:8px;}
+  .range-row input{width:0;flex:1;}
+  .search-full{width:100%;padding:11px 12px;border:1.5px solid var(--ink);border-radius:7px;font-size:0.92rem;margin-bottom:16px;font-family:'Inter',sans-serif;}
+  .search-full:focus{outline:none;border-color:var(--green);}
+  .clear-btn{width:100%;padding:8px;border:1px solid var(--line);background:transparent;border-radius:6px;font-size:0.78rem;color:var(--ink-soft);cursor:pointer;margin-top:4px;}
+  .clear-btn:hover{background:var(--line-soft);}
+
+  /* Results */
+  .results-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;}
+  .results-head span{font-size:0.8rem;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;}
+  .btn-row{display:flex;gap:6px;flex-wrap:wrap;}
+  .export-btn{font-size:0.78rem;border:1px solid var(--ink);background:var(--paper-raised);color:var(--ink);padding:7px 13px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;}
+  .export-btn:hover{background:var(--ink);color:var(--paper-raised);}
+  .export-btn.ghost{border-color:var(--line);color:var(--ink-soft);}
+  .export-btn.ghost:hover{background:var(--line-soft);color:var(--ink);}
+  .export-btn.danger{border-color:var(--brick);color:var(--brick);}
+  .export-btn.danger:hover{background:var(--brick);color:#fff;}
+  .dup-badge{background:var(--brick);color:#fff;border-radius:20px;font-size:0.64rem;padding:1px 7px;margin-left:6px;font-family:'IBM Plex Mono',monospace;}
+
+  .ledger{border-top:1.5px solid var(--ink);}
+  .ledger-head{display:grid;grid-template-columns:88px 1.4fr 1fr 110px 1fr;gap:10px;padding:8px 12px;font-size:0.7rem;text-transform:none;color:var(--ink-soft);border-bottom:1px solid var(--line);font-family:'IBM Plex Mono',monospace;}
+  .row{display:grid;grid-template-columns:88px 1.4fr 1fr 110px 1fr;gap:10px;padding:13px 12px;border-bottom:1px solid var(--line-soft);cursor:pointer;align-items:center;transition:background .1s;}
+  .row:hover{background:var(--green-soft);}
+  .row .c-fecha{font-family:'IBM Plex Mono',monospace;font-size:0.78rem;color:var(--ink-soft);}
+  .row .c-nombre{font-size:0.9rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .row .c-banco{font-size:0.82rem;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .row .c-valor{font-family:'IBM Plex Mono',monospace;font-size:0.88rem;text-align:right;color:var(--brick);}
+  .row .c-ref{font-family:'IBM Plex Mono',monospace;font-size:0.76rem;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  @media (max-width:640px){
+    .ledger-head{display:none;}
+    .row{grid-template-columns:1fr;gap:3px;padding:12px 10px;}
+    .row .c-valor{text-align:left;}
+  }
+
+  .empty{padding:50px 20px;text-align:center;color:var(--ink-soft);}
+  .empty .icon{font-size:2rem;margin-bottom:10px;}
+  .empty p{margin:0;font-size:0.9rem;max-width:38ch;margin:0 auto;line-height:1.5;}
+
+  /* Modal (detail) */
+  .overlay{position:fixed;inset:0;background:rgba(22,36,28,0.55);display:none;align-items:center;justify-content:center;z-index:50;padding:20px;}
+  .overlay.open{display:flex;}
+  .modal{background:var(--paper-raised);border-radius:12px;max-width:900px;width:100%;max-height:88vh;overflow-y:auto;display:grid;grid-template-columns:1fr 1fr;box-shadow:0 12px 32px rgba(22,36,28,0.25);}
+  @media (max-width:720px){ .modal{grid-template-columns:1fr;} }
+  .modal-img{background:var(--ink);display:flex;align-items:center;justify-content:center;padding:10px;min-height:180px;}
+  .modal-img img{max-width:100%;max-height:78vh;border-radius:4px;}
+  .modal-body{padding:22px;}
+  .modal-body h3{font-family:'Source Serif 4',serif;margin:0 0 14px;font-size:1.15rem;display:flex;justify-content:space-between;align-items:center;}
+  .modal-close{background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--ink-soft);line-height:1;}
+  .mfield{margin-bottom:11px;}
+  .mfield label{display:block;font-size:0.72rem;color:var(--ink-soft);margin-bottom:3px;}
+  .mfield input, .mfield textarea{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:5px;font-size:0.85rem;font-family:'Inter',sans-serif;background:#fff;}
+  .mfield textarea{font-family:'IBM Plex Mono',monospace;font-size:0.74rem;height:90px;resize:vertical;color:var(--ink-soft);}
+  .modal-actions{display:flex;gap:8px;margin-top:16px;}
+  .btn-save{flex:1;background:var(--green);color:#fff;border:none;padding:9px;border-radius:6px;font-size:0.85rem;cursor:pointer;}
+  .btn-del{background:var(--brick-soft);color:var(--brick);border:none;padding:9px 14px;border-radius:6px;font-size:0.85rem;cursor:pointer;}
+  .replace-img{display:block;font-size:0.72rem;color:var(--ink-soft);margin:-4px 0 12px;cursor:pointer;text-decoration:underline;}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:8px;font-size:0.82rem;z-index:70;opacity:0;transition:opacity .2s;pointer-events:none;max-width:88vw;text-align:center;}
+  .toast.show{opacity:1;}
+
+  /* Duplicates modal */
+  .dup-modal{grid-template-columns:1fr;max-width:760px;padding:0;}
+  .dup-header{display:flex;justify-content:space-between;align-items:center;padding:20px 22px 4px;}
+  .dup-header h3{font-family:'Source Serif 4',serif;margin:0;font-size:1.15rem;display:flex;align-items:center;}
+  .dup-count-pill{font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:var(--ink-soft);border:1px solid var(--line);border-radius:20px;padding:3px 10px;margin-left:9px;}
+  .dup-sub{padding:0 22px;font-size:0.82rem;color:var(--ink-soft);margin:4px 0 16px;line-height:1.5;}
+  #dupGroups{padding:0 22px 22px;display:flex;flex-direction:column;gap:16px;max-height:60vh;overflow-y:auto;}
+  .dup-group{border:1px solid var(--line-soft);border-radius:10px;padding:14px;background:var(--paper);}
+  .dup-group-head{font-size:0.8rem;font-weight:600;margin-bottom:10px;color:var(--ink);}
+  .dup-items{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+  .dup-item{display:flex;align-items:center;gap:10px;background:var(--paper-raised);border:1px solid var(--line-soft);border-radius:8px;padding:8px;}
+  .dup-item input{flex-shrink:0;width:16px;height:16px;}
+  .dup-thumb{width:46px;height:46px;border-radius:5px;overflow:hidden;background:var(--ink);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .dup-thumb img{width:100%;height:100%;object-fit:cover;}
+  .dup-noimg{font-size:0.5rem;color:#aaa;text-align:center;}
+  .dup-info{flex:1;display:flex;flex-direction:column;font-size:0.78rem;overflow:hidden;}
+  .dup-info strong{font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .dup-info span{color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .dup-ref{font-family:'IBM Plex Mono',monospace;font-size:0.68rem !important;}
+  .dup-view{border:1px solid var(--line);background:#fff;border-radius:5px;font-size:0.72rem;padding:6px 10px;cursor:pointer;flex-shrink:0;}
+  .dup-view:hover{background:var(--line-soft);}
+  .dup-actions{display:flex;gap:8px;justify-content:flex-end;}
+
+  /* Danger modal */
+  .danger-modal{grid-template-columns:1fr;max-width:440px;padding:26px;}
+  .danger-modal h3{font-family:'Source Serif 4',serif;margin:0 0 10px;font-size:1.1rem;}
+  .danger-check{display:flex;gap:8px;align-items:flex-start;font-size:0.82rem;color:var(--ink-soft);margin:14px 0;line-height:1.4;}
+  .danger-check input{margin-top:3px;flex-shrink:0;}
+  .btn-secondary{background:var(--ink-soft);color:#fff;border:none;padding:9px;border-radius:6px;font-size:0.85rem;cursor:pointer;flex:1;}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <div class="eyebrow">Control de transferencias</div>
+      <h1>Libro de comprobantes</h1>
+      <p>Archivo permanente de comprobantes: alimenta capturas durante todo el año y encuentra cualquier pago a proveedores, trabajadores o contratistas cuando lo necesites.</p>
+    </div>
+    <div class="count-badge" id="countBadge">0 comprobantes</div>
+  </header>
+  <div class="device-note">
+    📍 <b>Los datos se guardan en este navegador/dispositivo.</b> Si varias personas van a consultar desde computadores distintos, cada quien verá solo lo que suba en el suyo — usa "Copia de seguridad" y que la otra persona la importe con "Importar copia" para compartir el archivo completo (datos + fotos).
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat"><div class="stat-label">Total registrado</div><div class="stat-value" id="statCount">0</div></div>
+    <div class="stat"><div class="stat-label">Suma de valores</div><div class="stat-value" id="statSum">$0</div></div>
+    <div class="stat"><div class="stat-label">Última carga</div><div class="stat-value" id="statLast">—</div></div>
+  </div>
+
+  <div class="dropzone" id="dropzone">
+    <div class="icon">📥</div>
+    <div class="txt">
+      <strong>Arrastra capturas aquí o toca para elegir</strong>
+      <span>JPG, PNG o WEBP · se leen automáticamente con OCR</span>
+    </div>
+    <input type="file" id="fileInput" accept="image/*" multiple>
+  </div>
+
+  <div class="queue" id="queue"></div>
+  <div class="empty" id="loadingState" style="display:none">
+    <div class="icon">📖</div>
+    <p>Cargando tu archivo de comprobantes…</p>
+  </div>
+
+  <div class="layout">
+    <aside class="filters">
+      <h2>Buscar</h2>
+      <input class="search-full" id="fFull" placeholder="🔎 Texto completo…">
+
+      <div class="field">
+        <label>👤 Nombre</label>
+        <input id="fNombre" placeholder="ej. Juan Pérez">
+      </div>
+      <div class="field">
+        <label>🏦 Banco</label>
+        <select id="fBanco"><option value="">Todos</option></select>
+      </div>
+      <div class="field">
+        <label>💰 Valor (mín – máx)</label>
+        <div class="range-row">
+          <input id="fValorMin" type="number" placeholder="mín">
+          <input id="fValorMax" type="number" placeholder="máx">
+        </div>
+      </div>
+      <div class="field">
+        <label>📅 Fecha exacta</label>
+        <input id="fFecha" placeholder="ej. 03/09/2026">
+      </div>
+      <div class="field">
+        <label>📆 Rango de fechas</label>
+        <div class="range-row">
+          <input id="fFechaDesde" type="date">
+          <input id="fFechaHasta" type="date">
+        </div>
+      </div>
+      <div class="field">
+        <label>🔢 Número de referencia</label>
+        <input id="fRef" placeholder="ej. 00123456">
+      </div>
+      <div class="field">
+        <label>📱 Cuenta / teléfono</label>
+        <input id="fCuenta" placeholder="ej. 3001234567">
+      </div>
+      <button class="clear-btn" id="clearFilters">Limpiar filtros</button>
+    </aside>
+
+    <main>
+      <div class="results-head">
+        <span id="resultsCount">0 resultados</span>
+        <div class="btn-row">
+          <button class="export-btn" id="dupBtn">🔁 Revisar duplicados<span class="dup-badge" id="dupBadge" style="display:none"></span></button>
+          <button class="export-btn" id="exportXlsxBtn">Exportar Excel</button>
+          <button class="export-btn" id="exportBtn">Exportar CSV</button>
+          <button class="export-btn ghost" id="backupBtn">Copia de seguridad</button>
+          <button class="export-btn ghost" id="restoreBtn">Importar copia</button>
+          <button class="export-btn danger" id="clearAllBtn">🗑️ Vaciar todo</button>
+          <input type="file" id="restoreInput" accept="application/json" style="display:none">
+        </div>
+      </div>
+      <div class="ledger" id="ledger">
+        <div class="ledger-head">
+          <span>Fecha</span><span>Nombre</span><span>Banco</span><span style="text-align:right">Valor</span><span>Referencia</span>
+        </div>
+        <div id="rows"></div>
+      </div>
+      <div class="empty" id="emptyState" style="display:none">
+        <div class="icon">🧾</div>
+        <p>Aún no hay comprobantes. Sube tus primeras capturas arriba y los leeremos automáticamente.</p>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal" id="modal"></div>
+</div>
+<div class="overlay" id="dupOverlay">
+  <div class="modal dup-modal" id="dupModal"></div>
+</div>
+<div class="overlay" id="dangerOverlay">
+  <div class="modal danger-modal" id="dangerModal"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const BANKS = ["Bancolombia","Nequi","Daviplata","Davivienda","BBVA","Banco de Bogotá","Banco Popular","Scotiabank Colpatria","Colpatria","Banco de Occidente","Banco AV Villas","AV Villas","Banco Caja Social","Banco Agrario","Itaú","Banco Falabella","Bancoomeva","Banco Pichincha","Mibanco","Lulo Bank","Movii","RappiPay","Bancamía","Coink","Powwi","Banco W","Confiar","Coopcentral"];
+
+let entries = [];
+const $ = id => document.getElementById(id);
+
+function norm(s){ return (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); }
+function showToast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 2800); }
+function normValor(v){ return (v||'').replace(/\./g,'').replace(',', '.'); }
+function formatCOP(n){ return '$' + Math.round(n).toLocaleString('es-CO'); }
+
+/* ---------- Storage: IndexedDB ----------
+   Works standalone once hosted on Netlify (unlike window.storage, which only
+   exists inside Claude's own chat interface).
+   Two object stores:
+   - "meta": lightweight fields for every receipt — loads instantly and is
+     what search/filter runs against.
+   - "images": the actual screenshot per receipt id, fetched only when a
+     specific receipt is opened. No artificial size limits. */
+const DB_NAME = 'ComprobantesDB';
+const DB_VERSION = 1;
+let dbPromise = null;
+
+function openDB(){
+  if(dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', {keyPath:'id'});
+      if(!db.objectStoreNames.contains('images')) db.createObjectStore('images', {keyPath:'id'});
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return dbPromise;
+}
+async function idbGetAllMeta(){
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('meta','readonly');
+    const req = tx.objectStore('meta').getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbPutMeta(entry){
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('meta','readwrite');
+    tx.objectStore('meta').put(entry);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function idbDeleteMeta(id){
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('meta','readwrite');
+    tx.objectStore('meta').delete(id);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function idbPutImage(id, image){
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('images','readwrite');
+    tx.objectStore('images').put({id, image});
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function idbGetImage(id){
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('images','readonly');
+    const req = tx.objectStore('images').get(id);
+    req.onsuccess = () => resolve(req.result ? req.result.image : null);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbGetAllImages(){
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('images','readonly');
+    const req = tx.objectStore('images').getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbDeleteImage(id){
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('images','readwrite');
+    tx.objectStore('images').delete(id);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function idbClearAll(){
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(['meta','images'],'readwrite');
+    tx.objectStore('meta').clear();
+    tx.objectStore('images').clear();
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function loadEntries(){
+  $('loadingState').style.display = 'block';
+  try{
+    entries = await idbGetAllMeta();
+    entries.sort((a,b) => (b.addedAt||'').localeCompare(a.addedAt||''));
+  }catch(e){
+    entries = [];
+    showToast('No se pudo abrir el almacenamiento local del navegador');
+  }
+  $('loadingState').style.display = 'none';
+  render();
+}
+
+/* ---------- Image resize/compress ---------- */
+function resizeImage(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const maxW = 1100;
+        const scale = Math.min(1, maxW / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.78));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ---------- Field extraction heuristics ---------- */
+function parseFields(text){
+  const out = { nombre:'', valor:'', banco:'', fecha:'', referencia:'', cuenta:'', fullText: text };
+
+  for(const b of BANKS){
+    if(norm(text).includes(norm(b))){ out.banco = b; break; }
+  }
+
+  let best = 0, bestStr = '';
+  const valueRegex = /(?:\$|COP|cop)\s?([\d][\d.,]{3,})/gi;
+  let m;
+  while((m = valueRegex.exec(text)) !== null){
+    const numStr = m[1];
+    const num = parseFloat(numStr.replace(/\./g,'').replace(',', '.'));
+    if(!isNaN(num) && num > best){ best = num; bestStr = numStr; }
+  }
+  if(bestStr) out.valor = bestStr.replace(/[^\d.,]/g,'');
+
+  const monthPat = '(ene(?:ro)?|feb(?:rero)?|mar(?:zo)?|abr(?:il)?|may(?:o)?|jun(?:io)?|jul(?:io)?|ago(?:sto)?|sep(?:tiembre)?|set(?:iembre)?|oct(?:ubre)?|nov(?:iembre)?|dic(?:iembre)?)';
+  function monthNum(w){
+    const k = w.toLowerCase().replace('.','').slice(0,3);
+    const map = {ene:1,feb:2,mar:3,abr:4,may:5,jun:6,jul:7,ago:8,sep:9,set:9,oct:10,nov:11,dic:12};
+    return map[k] || null;
+  }
+  let fm = text.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/);
+  if(fm){
+    let [_, d, mo, y] = fm;
+    if(y.length === 2) y = '20'+y;
+    out.fecha = `${d.padStart(2,'0')}/${mo.padStart(2,'0')}/${y}`;
+  } else if(fm = text.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/)){
+    out.fecha = `${fm[3].padStart(2,'0')}/${fm[2].padStart(2,'0')}/${fm[1]}`;
+  } else if(fm = text.match(new RegExp('(\\d{1,2})\\s+de\\s+'+monthPat+'\\s+de\\s+(\\d{4})','i'))){
+    out.fecha = `${fm[1].padStart(2,'0')}/${String(monthNum(fm[2])).padStart(2,'0')}/${fm[3]}`;
+  } else if(fm = text.match(new RegExp(monthPat+'\\s+(\\d{1,2})\\s+de\\s+(\\d{4})','i'))){
+    out.fecha = `${fm[2].padStart(2,'0')}/${String(monthNum(fm[1])).padStart(2,'0')}/${fm[3]}`;
+  } else if(fm = text.match(new RegExp('(\\d{1,2})\\s+'+monthPat+'\\.?\\s+(\\d{4})','i'))){
+    out.fecha = `${fm[1].padStart(2,'0')}/${String(monthNum(fm[2])).padStart(2,'0')}/${fm[3]}`;
+  }
+
+  const refM = text.match(/(?:referencia|ref\.?|comprobante(?:\s*no\.?)?|n[uú]mero\s*de\s*aprobaci[oó]n|n[uú]mero\s*de\s*operaci[oó]n|c[oó]digo)\s*[:#]?\s*([A-Za-z0-9]{4,40})/i);
+  if(refM) out.referencia = refM[1];
+
+  let cuentaM = text.match(/(?:cuenta|celular|tel[eé]fono|nequi|llave|n[uú]mero)\D{0,15}(\d[\d\s]{6,13}\d)/i);
+  if(cuentaM) out.cuenta = cuentaM[1].replace(/\s+/g,'');
+  else{
+    const anyM = text.match(/\b\d{3}\s\d{3}\s\d{4}\b|\b\d{10}\b|\b\d{7,9}\b/);
+    if(anyM) out.cuenta = anyM[0].replace(/\s+/g,'');
+  }
+
+  const namePatterns = [
+    /destinatario\s*\n\s*([^\n]{3,45})/i,
+    /(?:producto destino|beneficiario)\s*\n\s*([^\n]{3,45})/i,
+    /enviaste\s*\n\s*([^\n]{3,45})/i,
+    /pasaste plata por bre-?b\s*\n\s*a\s+([^\n]{3,45})/i,
+    /para\s*[:\-]?\s*\n?\s*([^\n]{3,45})/i,
+    /(?:^|\n)a\s+([^\n]{3,45})\s*\n\s*\d/i,
+  ];
+  for(const p of namePatterns){
+    const nm = text.match(p);
+    if(nm){ out.nombre = nm[1].trim(); break; }
+  }
+
+  return out;
+}
+
+/* ---------- Upload / OCR pipeline ---------- */
+async function handleFiles(fileList){
+  const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+  for(const file of files){
+    const qId = 'q'+Math.random().toString(36).slice(2);
+    addQueueItem(qId, file.name);
+    try{
+      const imgData = await resizeImage(file);
+      const result = await Tesseract.recognize(imgData, 'spa', {
+        logger: p => {
+          if(p.status === 'recognizing text'){
+            updateQueueItem(qId, Math.round(p.progress*100), 'Leyendo…');
+          }
+        }
+      });
+      const text = result.data.text || '';
+      const fields = parseFields(text);
+      const entry = {
+        id: 'e'+Date.now()+Math.random().toString(36).slice(2),
+        filename: file.name,
+        addedAt: new Date().toISOString(),
+        ...fields
+      };
+      updateQueueItem(qId, 100, 'Guardando…');
+      await idbPutImage(entry.id, imgData);
+      await idbPutMeta(entry);
+      entries.unshift(entry);
+      updateQueueItem(qId, 100, 'Listo ✓');
+      setTimeout(()=>removeQueueItem(qId), 1200);
+      populateBankFilter();
+      render();
+    }catch(err){
+      updateQueueItem(qId, 0, 'Error');
+      showToast('No se pudo leer '+file.name);
+    }
+  }
+}
+
+function addQueueItem(id, name){
+  const div = document.createElement('div');
+  div.className = 'queue-item';
+  div.id = id;
+  div.innerHTML = `<span class="qname">${name}</span><div class="bar"><div class="bar-fill" id="${id}-bar"></div></div><span class="qstatus" id="${id}-status">Preparando…</span>`;
+  $('queue').appendChild(div);
+}
+function updateQueueItem(id, pct, status){
+  const bar = document.getElementById(id+'-bar');
+  const st = document.getElementById(id+'-status');
+  if(bar) bar.style.width = pct+'%';
+  if(st) st.textContent = status;
+}
+function removeQueueItem(id){
+  const el = document.getElementById(id);
+  if(el) el.remove();
+}
+
+/* ---------- Filtering & rendering ---------- */
+function populateBankFilter(){
+  const sel = $('fBanco');
+  const current = sel.value;
+  const present = [...new Set(entries.map(e=>e.banco).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">Todos</option>' + present.map(b=>`<option value="${b}">${b}</option>`).join('');
+  sel.value = current;
+}
+
+function parseDateToTs(d){
+  const m = (d||'').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if(!m) return null;
+  return new Date(`${m[3]}-${m[2]}-${m[1]}`).getTime();
+}
+
+function getFiltered(){
+  const full = norm($('fFull').value);
+  const nombre = norm($('fNombre').value);
+  const banco = $('fBanco').value;
+  const vmin = parseFloat($('fValorMin').value);
+  const vmax = parseFloat($('fValorMax').value);
+  const fecha = norm($('fFecha').value);
+  const desde = $('fFechaDesde').value ? new Date($('fFechaDesde').value).getTime() : null;
+  const hasta = $('fFechaHasta').value ? new Date($('fFechaHasta').value).getTime() : null;
+  const ref = norm($('fRef').value);
+  const cuenta = norm($('fCuenta').value);
+
+  return entries.filter(e => {
+    if(full && !norm(e.fullText).includes(full)) return false;
+    if(nombre && !norm(e.nombre).includes(nombre)) return false;
+    if(banco && e.banco !== banco) return false;
+    if(ref && !norm(e.referencia).includes(ref)) return false;
+    if(cuenta && !norm(e.cuenta).includes(cuenta)) return false;
+    if(fecha && !norm(e.fecha).includes(fecha)) return false;
+    if(!isNaN(vmin) || !isNaN(vmax)){
+      const val = parseFloat((e.valor||'0').replace(/\./g,'').replace(',', '.'));
+      if(!isNaN(vmin) && val < vmin) return false;
+      if(!isNaN(vmax) && val > vmax) return false;
+    }
+    if(desde || hasta){
+      const ts = parseDateToTs(e.fecha);
+      if(ts === null) return false;
+      if(desde && ts < desde) return false;
+      if(hasta && ts > hasta + 86400000) return false;
+    }
+    return true;
+  });
+}
+
+function updateStats(){
+  $('statCount').textContent = entries.length;
+  let sum = 0;
+  entries.forEach(e => { const v = parseFloat(normValor(e.valor)); if(!isNaN(v)) sum += v; });
+  $('statSum').textContent = formatCOP(sum);
+  let last = '—';
+  if(entries.length){
+    const latest = entries.reduce((a,b) => (a.addedAt||'') > (b.addedAt||'') ? a : b);
+    if(latest.addedAt){
+      last = new Date(latest.addedAt).toLocaleDateString('es-CO', {day:'2-digit',month:'short',year:'numeric'});
+    }
+  }
+  $('statLast').textContent = last;
+}
+
+function updateDuplicateBadge(){
+  const groups = findDuplicateGroups();
+  const badge = $('dupBadge');
+  if(groups.length > 0){
+    badge.textContent = groups.length;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function render(){
+  $('countBadge').textContent = `${entries.length} comprobante${entries.length===1?'':'s'}`;
+  const filtered = getFiltered();
+  $('resultsCount').textContent = `${filtered.length} resultado${filtered.length===1?'':'s'}`;
+  const rows = $('rows');
+  rows.innerHTML = '';
+  $('emptyState').style.display = entries.length === 0 ? 'block' : 'none';
+  $('ledger').style.display = entries.length === 0 ? 'none' : 'block';
+
+  filtered.forEach(e => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `
+      <span class="c-fecha">${e.fecha || '—'}</span>
+      <span class="c-nombre">${e.nombre || '(sin nombre)'}</span>
+      <span class="c-banco">${e.banco || '—'}</span>
+      <span class="c-valor">${e.valor ? '$'+e.valor : '—'}</span>
+      <span class="c-ref">${e.referencia || '—'}</span>
+    `;
+    row.onclick = () => openModal(e.id);
+    rows.appendChild(row);
+  });
+
+  updateStats();
+  updateDuplicateBadge();
+}
+
+/* ---------- Detail modal ---------- */
+function openModal(id){
+  const e = entries.find(x => x.id === id);
+  if(!e) return;
+  const modal = $('modal');
+  modal.innerHTML = `
+    <div class="modal-img" id="modalImgWrap"><span style="color:#ccc;font-size:0.8rem">Cargando imagen…</span></div>
+    <div class="modal-body">
+      <h3>Detalle <button class="modal-close" id="mClose">✕</button></h3>
+      <label class="replace-img">
+        📎 Reemplazar imagen de este comprobante
+        <input type="file" accept="image/*" id="mReplaceImg" style="display:none;">
+      </label>
+      <div class="mfield"><label>👤 Nombre</label><input id="mNombre" value="${e.nombre||''}"></div>
+      <div class="mfield"><label>💰 Valor</label><input id="mValor" value="${e.valor||''}"></div>
+      <div class="mfield"><label>🏦 Banco</label><input id="mBanco" value="${e.banco||''}"></div>
+      <div class="mfield"><label>📅 Fecha (dd/mm/aaaa)</label><input id="mFecha" value="${e.fecha||''}"></div>
+      <div class="mfield"><label>🔢 Referencia</label><input id="mRef" value="${e.referencia||''}"></div>
+      <div class="mfield"><label>📱 Cuenta / teléfono</label><input id="mCuenta" value="${e.cuenta||''}"></div>
+      <div class="mfield"><label>Texto completo detectado (editable, se usa para la búsqueda 🔎)</label><textarea id="mFull">${e.fullText||''}</textarea></div>
+      <div class="modal-actions">
+        <button class="btn-save" id="mSave">Guardar cambios</button>
+        <button class="btn-del" id="mDel">Eliminar</button>
+      </div>
+    </div>
+  `;
+  $('overlay').classList.add('open');
+  idbGetImage(id).then(img => {
+    const wrap = $('modalImgWrap');
+    if(!wrap) return;
+    wrap.innerHTML = img ? `<img src="${img}">` : '<span style="color:#ccc;font-size:0.8rem">Imagen no disponible</span>';
+  }).catch(() => {
+    const wrap = $('modalImgWrap');
+    if(wrap) wrap.innerHTML = '<span style="color:#ccc;font-size:0.8rem">Imagen no disponible</span>';
+  });
+  $('mReplaceImg').onchange = async (ev) => {
+    const file = ev.target.files[0];
+    if(!file) return;
+    const wrap = $('modalImgWrap');
+    if(wrap) wrap.innerHTML = '<span style="color:#ccc;font-size:0.8rem">Guardando…</span>';
+    try{
+      const imgData = await resizeImage(file);
+      await idbPutImage(id, imgData);
+      if(wrap) wrap.innerHTML = `<img src="${imgData}">`;
+      showToast('Imagen actualizada');
+    }catch(err){
+      showToast('No se pudo guardar la imagen');
+    }
+  };
+  $('mClose').onclick = closeModal;
+  $('mSave').onclick = async () => {
+    e.nombre = $('mNombre').value;
+    e.valor = $('mValor').value;
+    e.banco = $('mBanco').value;
+    e.fecha = $('mFecha').value;
+    e.referencia = $('mRef').value;
+    e.cuenta = $('mCuenta').value;
+    e.fullText = $('mFull').value;
+    await idbPutMeta(e);
+    populateBankFilter();
+    render();
+    closeModal();
+    showToast('Guardado');
+  };
+  $('mDel').onclick = async () => {
+    if(!confirm('¿Eliminar este comprobante? No se puede deshacer.')) return;
+    entries = entries.filter(x => x.id !== id);
+    await idbDeleteMeta(id);
+    await idbDeleteImage(id);
+    populateBankFilter();
+    render();
+    closeModal();
+    showToast('Comprobante eliminado');
+  };
+}
+function closeModal(){ $('overlay').classList.remove('open'); }
+$('overlay').addEventListener('click', e => { if(e.target.id === 'overlay') closeModal(); });
+
+/* ---------- Duplicate detection ---------- */
+function findDuplicateGroups(){
+  const parent = {};
+  function find(x){ if(parent[x]===undefined) parent[x]=x; while(parent[x]!==x){ x=parent[x]=parent[parent[x]]!==undefined?parent[parent[x]]:parent[x]; } return x; }
+  function union(a,b){ const ra=find(a), rb=find(b); if(ra!==rb) parent[ra]=rb; }
+  entries.forEach(e => { if(parent[e.id]===undefined) parent[e.id]=e.id; });
+
+  // Same non-empty reference number is a very strong signal
+  const byRef = {};
+  entries.forEach(e => {
+    const r = norm(e.referencia);
+    if(r && r.length>=4){ (byRef[r] = byRef[r]||[]).push(e.id); }
+  });
+  Object.values(byRef).forEach(ids => { for(let i=1;i<ids.length;i++) union(ids[0], ids[i]); });
+
+  // Same valor + fecha + cuenta
+  const byVFC = {};
+  entries.forEach(e => {
+    if(e.valor && e.fecha && e.cuenta){
+      const key = normValor(e.valor)+'|'+e.fecha+'|'+norm(e.cuenta);
+      (byVFC[key] = byVFC[key]||[]).push(e.id);
+    }
+  });
+  Object.values(byVFC).forEach(ids => { for(let i=1;i<ids.length;i++) union(ids[0], ids[i]); });
+
+  // Same valor + fecha + nombre (fallback when no cuenta detected)
+  const byVFN = {};
+  entries.forEach(e => {
+    if(e.valor && e.fecha && e.nombre){
+      const key = normValor(e.valor)+'|'+e.fecha+'|'+norm(e.nombre);
+      (byVFN[key] = byVFN[key]||[]).push(e.id);
+    }
+  });
+  Object.values(byVFN).forEach(ids => { for(let i=1;i<ids.length;i++) union(ids[0], ids[i]); });
+
+  const groups = {};
+  entries.forEach(e => {
+    const root = find(e.id);
+    (groups[root] = groups[root]||[]).push(e);
+  });
+  return Object.values(groups).filter(g => g.length > 1);
+}
+
+function openDuplicatesModal(){
+  const groups = findDuplicateGroups();
+  if(groups.length === 0){ showToast('No se encontraron posibles duplicados 🎉'); return; }
+  renderDuplicatesModal(groups);
+  $('dupOverlay').classList.add('open');
+}
+
+function renderDuplicatesModal(groups){
+  const modal = $('dupModal');
+  modal.innerHTML = `
+    <div class="dup-header">
+      <h3>Posibles duplicados <span class="dup-count-pill">${groups.length} grupo${groups.length===1?'':'s'}</span></h3>
+      <button class="modal-close" id="dupClose">✕</button>
+    </div>
+    <p class="dup-sub">Comprobantes con el mismo valor, fecha y cuenta (o la misma referencia). Abre cada uno para comparar la imagen y decide cuáles conservar.</p>
+    <div id="dupGroups"></div>
+  `;
+  $('dupClose').onclick = () => $('dupOverlay').classList.remove('open');
+  const container = $('dupGroups');
+  groups.forEach((group, gi) => {
+    const card = document.createElement('div');
+    card.className = 'dup-group';
+    card.innerHTML = `
+      <div class="dup-group-head">Grupo ${gi+1} · ${group.length} comprobantes parecidos</div>
+      <div class="dup-items" id="dupItems-${gi}"></div>
+      <div class="dup-actions">
+        <button class="export-btn ghost" data-dismiss>No son duplicados</button>
+        <button class="btn-del" data-delete-group>Eliminar seleccionados</button>
+      </div>
+    `;
+    container.appendChild(card);
+    const itemsWrap = card.querySelector(`#dupItems-${gi}`);
+    group.forEach(e => {
+      const item = document.createElement('label');
+      item.className = 'dup-item';
+      item.innerHTML = `
+        <input type="checkbox" class="dup-check" data-id="${e.id}">
+        <div class="dup-thumb" id="thumb-${e.id}">…</div>
+        <div class="dup-info">
+          <strong>${e.nombre || '(sin nombre)'}</strong>
+          <span>${e.fecha||'—'} · $${e.valor||'—'} · ${e.banco||'—'}</span>
+          <span class="dup-ref">Ref: ${e.referencia||'—'} · Cuenta: ${e.cuenta||'—'}</span>
+        </div>
+        <button type="button" class="dup-view" data-view="${e.id}">Ver</button>
+      `;
+      itemsWrap.appendChild(item);
+      idbGetImage(e.id).then(img => {
+        const t = document.getElementById(`thumb-${e.id}`);
+        if(t) t.innerHTML = img ? `<img src="${img}">` : '<span class="dup-noimg">Sin imagen</span>';
+      });
+    });
+    card.querySelector('[data-view]') // no-op, individual buttons wired below
+  });
+  container.querySelectorAll('[data-view]').forEach(btn => {
+    btn.addEventListener('click', (ev) => { ev.preventDefault(); openModal(btn.dataset.view); });
+  });
+  container.querySelectorAll('[data-dismiss]').forEach(btn => {
+    btn.addEventListener('click', () => { btn.closest('.dup-group').remove(); });
+  });
+  container.querySelectorAll('[data-delete-group]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const groupEl = btn.closest('.dup-group');
+      const checked = [...groupEl.querySelectorAll('.dup-check:checked')].map(c => c.dataset.id);
+      if(checked.length === 0){ showToast('Selecciona al menos un comprobante para eliminar'); return; }
+      if(!confirm(`¿Eliminar ${checked.length} comprobante(s) seleccionados? No se puede deshacer.`)) return;
+      for(const id of checked){
+        entries = entries.filter(x => x.id !== id);
+        await idbDeleteMeta(id);
+        await idbDeleteImage(id);
+      }
+      populateBankFilter();
+      render();
+      groupEl.remove();
+      showToast('Comprobantes eliminados');
+    });
+  });
+}
+$('dupOverlay').addEventListener('click', e => { if(e.target.id === 'dupOverlay') $('dupOverlay').classList.remove('open'); });
+
+/* ---------- Clear all (with backup suggestion, not forced) ---------- */
+function openClearAllModal(){
+  const modal = $('dangerModal');
+  modal.innerHTML = `
+    <h3>Vaciar toda la base de datos</h3>
+    <p style="font-size:0.86rem;color:var(--ink-soft);line-height:1.5;margin:0;">Esto eliminará permanentemente los <b>${entries.length}</b> comprobantes guardados en este navegador — texto e imágenes. No se puede deshacer.</p>
+    <button class="export-btn" id="dangerBackupBtn" style="width:100%;margin-top:16px;">📥 Descargar copia de seguridad primero</button>
+    <label class="danger-check">
+      <input type="checkbox" id="dangerConfirmCheck">
+      Entiendo que esta acción no se puede deshacer y quiero continuar de todos modos.
+    </label>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="dangerCancelBtn">Cancelar</button>
+      <button class="btn-del" id="dangerConfirmBtn" disabled style="opacity:0.5;cursor:not-allowed;">Vaciar todo</button>
+    </div>
+  `;
+  $('dangerOverlay').classList.add('open');
+  $('dangerBackupBtn').onclick = exportBackup;
+  $('dangerCancelBtn').onclick = () => $('dangerOverlay').classList.remove('open');
+  const checkbox = $('dangerConfirmCheck');
+  const confirmBtn = $('dangerConfirmBtn');
+  checkbox.onchange = () => {
+    confirmBtn.disabled = !checkbox.checked;
+    confirmBtn.style.opacity = checkbox.checked ? '1' : '0.5';
+    confirmBtn.style.cursor = checkbox.checked ? 'pointer' : 'not-allowed';
+  };
+  confirmBtn.onclick = async () => {
+    if(!checkbox.checked) return;
+    await clearAllData();
+    $('dangerOverlay').classList.remove('open');
+  };
+}
+$('dangerOverlay').addEventListener('click', e => { if(e.target.id === 'dangerOverlay') $('dangerOverlay').classList.remove('open'); });
+
+async function clearAllData(){
+  try{
+    await idbClearAll();
+    entries = [];
+    populateBankFilter();
+    render();
+    showToast('Base de datos vaciada');
+  }catch(e){
+    showToast('No se pudo vaciar la base de datos');
+  }
+}
+
+/* ---------- Export CSV / Excel ---------- */
+function exportCSV(){
+  const filtered = getFiltered();
+  const headers = ['Fecha','Nombre','Banco','Valor','Referencia','Cuenta/Telefono'];
+  const rows = filtered.map(e => [e.fecha,e.nombre,e.banco,e.valor,e.referencia,e.cuenta]
+    .map(v => `"${(v||'').toString().replace(/"/g,'""')}"`).join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'comprobantes.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+function exportXLSX(){
+  const filtered = getFiltered();
+  const data = filtered.map(e => ({
+    Fecha: e.fecha || '',
+    Nombre: e.nombre || '',
+    Banco: e.banco || '',
+    Valor: e.valor ? Number(e.valor.replace(/\./g,'').replace(',', '.')) : '',
+    Referencia: e.referencia || '',
+    'Cuenta/Teléfono': e.cuenta || ''
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws['!cols'] = [{wch:12},{wch:28},{wch:20},{wch:14},{wch:16},{wch:16}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Comprobantes');
+  XLSX.writeFile(wb, 'comprobantes.xlsx');
+}
+
+/* ---------- Backup export / import (data + images together) ---------- */
+async function exportBackup(){
+  showToast('Preparando copia de seguridad…');
+  try{
+    const images = await idbGetAllImages();
+    const imgMap = {};
+    images.forEach(r => imgMap[r.id] = r.image);
+    const full = entries.map(e => ({...e, image: imgMap[e.id] || null}));
+    const blob = new Blob([JSON.stringify(full)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'comprobantes-backup.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Copia de seguridad descargada');
+  }catch(e){
+    showToast('No se pudo generar la copia de seguridad');
+  }
+}
+async function importBackup(file){
+  try{
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if(!Array.isArray(data)) throw new Error('formato inválido');
+    let count = 0;
+    for(const rec of data){
+      if(!rec.id) continue;
+      const {image, ...meta} = rec;
+      await idbPutMeta(meta);
+      if(image) await idbPutImage(rec.id, image);
+      count++;
+    }
+    await loadEntries();
+    populateBankFilter();
+    showToast(`Se importaron ${count} comprobantes`);
+  }catch(e){
+    showToast('El archivo de copia de seguridad no es válido');
+  }
+}
+
+/* ---------- Wiring ---------- */
+const dropzone = $('dropzone');
+dropzone.addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', e => handleFiles(e.target.files));
+['dragenter','dragover'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('drag'); }));
+dropzone.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
+
+['fFull','fNombre','fValorMin','fValorMax','fFecha','fFechaDesde','fFechaHasta','fRef','fCuenta'].forEach(id => {
+  $(id).addEventListener('input', render);
+});
+$('fBanco').addEventListener('change', render);
+$('exportBtn').addEventListener('click', exportCSV);
+$('exportXlsxBtn').addEventListener('click', exportXLSX);
+$('backupBtn').addEventListener('click', exportBackup);
+$('restoreBtn').addEventListener('click', () => $('restoreInput').click());
+$('restoreInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if(file) importBackup(file);
+  e.target.value = '';
+});
+$('dupBtn').addEventListener('click', openDuplicatesModal);
+$('clearAllBtn').addEventListener('click', openClearAllModal);
+$('clearFilters').addEventListener('click', () => {
+  ['fFull','fNombre','fValorMin','fValorMax','fFecha','fFechaDesde','fFechaHasta','fRef','fCuenta'].forEach(id => $(id).value = '');
+  $('fBanco').value = '';
+  render();
+});
+
+loadEntries().then(populateBankFilter);
+</script>
+</body>
+</html>
